@@ -17,10 +17,10 @@ contract GameNFTTest is Test {
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
 
+        vm.startPrank(deployer);
         DeployGameNFT deployGameNFT = new DeployGameNFT();
         gameNFT = deployGameNFT.run(deployer);
 
-        vm.startPrank(deployer);
         gameNFT.createGame(
             "Test Game",
             "Description",

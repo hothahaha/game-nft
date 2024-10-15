@@ -5,16 +5,12 @@ import {Script} from "forge-std/Script.sol";
 import {GameLottery} from "../src/GameLottery.sol";
 import {GameNFT} from "../src/GameNFT.sol";
 import {GameMarketplace} from "../src/GameMarketplace.sol";
-import {DeployGameNFT} from "../script/DeployGameNFT.s.sol";
 import {DeployGameMarketplace} from "../script/DeployGameMarketplace.s.sol";
 import {HelperConfig} from "script/HelperConfig.sol";
 import {CreateSubscription, FundSubscription, AddConsumer} from "script/Interactions.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployGameLottery is Script {
-    GameNFT gameNFT;
-    GameMarketplace gameMarketplace;
-
     function run(
         address initialOwner
     ) external returns (GameLottery, GameNFT, GameMarketplace, HelperConfig) {
@@ -23,11 +19,24 @@ contract DeployGameLottery is Script {
 
         _setupSubscription(config);
 
-        (gameNFT, gameMarketplace) = _deployNFTAndMarketplace(initialOwner);
+        (
+            GameMarketplace gameMarketplace,
+            GameNFT gameNFT
+        ) = new DeployGameMarketplace().run(initialOwner);
 
-        GameLottery gameLottery = _deployGameLottery(config);
+        GameLottery gameLottery = _deployGameLottery(
+            config,
+            address(gameNFT),
+            address(gameMarketplace)
+        );
 
-        _addConsumer(address(gameLottery), config);
+        new AddConsumer().addConsumer(
+            address(gameLottery),
+            config.vrfCoordinator,
+            config.subscriptionId,
+            config.account
+        );
+
         return (gameLottery, gameNFT, gameMarketplace, helperConfig);
     }
 
@@ -35,12 +44,15 @@ contract DeployGameLottery is Script {
         HelperConfig.NetworkConfig memory config
     ) internal {
         if (config.subscriptionId == 0) {
-            CreateSubscription createSubscription = new CreateSubscription();
-            (config.subscriptionId, config.vrfCoordinator) = createSubscription
-                .createSubscription(config.vrfCoordinator, config.account);
+            (
+                config.subscriptionId,
+                config.vrfCoordinator
+            ) = new CreateSubscription().createSubscription(
+                config.vrfCoordinator,
+                config.account
+            );
 
-            FundSubscription fundSubscription = new FundSubscription();
-            fundSubscription.fundSubscription(
+            new FundSubscription().fundSubscription(
                 config.subscriptionId,
                 config.vrfCoordinator,
                 config.link,
@@ -49,50 +61,23 @@ contract DeployGameLottery is Script {
         }
     }
 
-    function _deployNFTAndMarketplace(
-        address initialOwner
-    ) internal returns (GameNFT, GameMarketplace) {
-        DeployGameMarketplace deployGameMarketplace = new DeployGameMarketplace();
-        (gameMarketplace, gameNFT) = deployGameMarketplace.run(initialOwner);
-
-        return (gameNFT, gameMarketplace);
-    }
-
     function _deployGameLottery(
-        HelperConfig.NetworkConfig memory config
+        HelperConfig.NetworkConfig memory config,
+        address gameNFTAddress,
+        address gameMarketplaceAddress
     ) internal returns (GameLottery) {
-        GameLottery implementationGameLottery = new GameLottery();
-
-        bytes memory dataGameLottery = abi.encodeWithSelector(
+        GameLottery implementation = new GameLottery();
+        bytes memory data = abi.encodeWithSelector(
             GameLottery.initialize.selector,
             config.entranceFee,
             config.vrfCoordinator,
             config.subscriptionId,
             config.gasLane,
             config.callbackGasLimit,
-            address(gameNFT),
-            address(gameMarketplace)
+            gameNFTAddress,
+            gameMarketplaceAddress
         );
-
-        ERC1967Proxy proxyGameLottery = new ERC1967Proxy(
-            address(implementationGameLottery),
-            dataGameLottery
-        );
-        GameLottery gameLottery = GameLottery(address(proxyGameLottery));
-
-        return gameLottery;
-    }
-
-    function _addConsumer(
-        address gameLotteryAddress,
-        HelperConfig.NetworkConfig memory config
-    ) internal {
-        AddConsumer addConsumer = new AddConsumer();
-        addConsumer.addConsumer(
-            gameLotteryAddress,
-            config.vrfCoordinator,
-            config.subscriptionId,
-            config.account
-        );
+        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), data);
+        return GameLottery(address(proxy));
     }
 }

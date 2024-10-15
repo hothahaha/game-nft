@@ -19,10 +19,10 @@ contract GameMarketplaceTest is Test {
 
     function setUp() public {
         deployer = msg.sender;
-        vm.startPrank(deployer);
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
 
+        vm.startPrank(deployer);
         DeployGameMarketplace deployGameMarketplace = new DeployGameMarketplace();
         (gameMarketplace, gameNFT) = deployGameMarketplace.run(deployer);
 
@@ -75,7 +75,7 @@ contract GameMarketplaceTest is Test {
         vm.expectRevert(
             GameMarketplace.GameMarketplace__InsufficientPayment.selector
         );
-        gameMarketplace.purchaseGames{value: 89}(); // Insufficient payment
+        gameMarketplace.purchaseGames{value: 9}(); // Insufficient payment
         vm.stopPrank();
     }
 

@@ -16,16 +16,13 @@ contract GameLottery is
     OwnableUpgradeable,
     VRFConsumerBaseV2Upgradeable
 {
-    // 错误
     error GameLottery__InsufficientPayment();
     error GameLottery__NoGamesAvailable();
 
-    // 静态变量
     uint256 private constant MAX_CHANCE_VALUE = 100;
     uint16 private constant REQUEST_CONFIRMATIONS = 3;
     uint32 private constant NUM_WORDS = 1;
 
-    // 状态变量
     GameNFT public s_gameNFT;
     GameMarketplace public s_gameMarketplace;
 
@@ -37,16 +34,9 @@ contract GameLottery is
 
     mapping(uint256 => address) private s_requestIdToSender;
 
-    // 事件
     event LotteryEntered(address indexed player);
     event LotteryWon(address indexed player, uint256 indexed tokenId);
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    // 初始化函数
     function initialize(
         uint256 _entranceFee,
         address _vrfCoordinator,
@@ -58,6 +48,7 @@ contract GameLottery is
     ) external initializer {
         __UUPSUpgradeable_init();
         __VRFConsumerBaseV2_init(_vrfCoordinator);
+        __Ownable_init(msg.sender);
         s_entranceFee = _entranceFee;
         s_vrfCoordinator = _vrfCoordinator;
         s_subscriptionId = _subscriptionId;
@@ -67,12 +58,9 @@ contract GameLottery is
         s_gameMarketplace = GameMarketplace(_gameMarketplace);
     }
 
-    // 外部函数
-    /// @notice 玩家进入抽奖
     function enterLottery() external payable {
-        if (msg.value < s_entranceFee) {
+        if (msg.value < s_entranceFee)
             revert GameLottery__InsufficientPayment();
-        }
 
         VRFV2PlusClient.RandomWordsRequest memory params = VRFV2PlusClient
             .RandomWordsRequest({
@@ -94,14 +82,11 @@ contract GameLottery is
         emit LotteryEntered(msg.sender);
     }
 
-    // 内部函数
-    /// @notice 处理随机数结果
     function fulfillRandomWords(
         uint256 _requestId,
         uint256[] memory _randomWords
     ) internal override {
         address player = s_requestIdToSender[_requestId];
-
         uint256 randomNumber = _randomWords[0] % MAX_CHANCE_VALUE;
         GameNFT.Rarity wonRarity = getGameFromRarity(randomNumber);
 
@@ -114,13 +99,12 @@ contract GameLottery is
         emit LotteryWon(player, wonTokenId);
     }
 
-    /// @notice 根据随机数确定游戏稀有度
     function getGameFromRarity(
         uint256 moddedRng
     ) public pure returns (GameNFT.Rarity) {
-        uint8[4] memory chanceValues = _getChanceValue();
+        uint8[4] memory chanceValues = [55, 30, 12, 3];
         uint256 cumulativeProbability = 0;
-        for (uint256 i = 0; i < chanceValues.length; i++) {
+        for (uint256 i = 0; i < 4; i++) {
             cumulativeProbability += chanceValues[i];
             if (moddedRng < cumulativeProbability) {
                 return GameNFT.Rarity(i);
@@ -129,17 +113,10 @@ contract GameLottery is
         return GameNFT.Rarity.Common;
     }
 
-    /// @notice 获取各稀有度的概率值
-    function _getChanceValue() private pure returns (uint8[4] memory) {
-        return [55, 30, 12, 3];
-    }
-
-    /// @notice 授权升级合约
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
 
-    // Getter 函数
     function getEntranceFee() public view returns (uint256) {
         return s_entranceFee;
     }
